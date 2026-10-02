@@ -1,40 +1,41 @@
 # one_rps
 
-A small C++ playground growing toward a lightweight TCP API.
+A small learning project focused on building a lightweight API/server from the ground up.
 
-This repository is currently the first stepping stone: a compact C++ exercise that demonstrates references, function overloading, and basic console output. The longer-term destination is a file-backed CRUD API, built up carefully from the networking layer.
+This repository is in its early stages: it currently contains a C++ practice program and a blank file reserved for a future TCP/API implementation. The long-term direction is to evolve this project into a simple file-backed CRUD service with a minimal networking layer and a clear performance roadmap.
 
-## Current Status
+## Project status
 
-**Stage 1: C++ fundamentals**
+Right now, the repo is best described as a prototype and learning scaffold rather than a running API service.
 
-`main.cpp` currently demonstrates:
+### Current state
 
-- Pass-by-value versus pass-by-reference with `change`
-- Function overloading for `int`, `double`, and `std::string`
-- Simple command-line output
+- `main.cpp` demonstrates:
+  - pass-by-reference behavior
+  - function overloading for `int`, `double`, and `std::string`
+  - basic console output
+- `api.c` is intentionally empty and reserved for future TCP/server work
+- `main` is a compiled binary generated locally from `main.cpp`
 
-`api.c` is reserved for the future API implementation and is currently empty.
+## What it is trying to become
 
-## Example Output
+The project notes in `main.cpp` outline a progression like this:
 
-Running the current program prints:
+1. Build a simple TCP server in C++
+2. Add a temporary file-based database
+3. Implement CRUD operations on top of that data layer
+4. Expose endpoints for API-style operations
+5. Scale toward handling approximately 10,000 requests
+6. Explore the architecture needed for much larger throughput targets, including 1M requests per second
 
-```text
-10 200
-int add called
-double add called
-string add called
-```
+This is a hands-on coding exercise and a roadmap for gradual system design, not a production-ready service yet.
 
-The first line shows the key reference exercise: `a` is passed by value and remains `10`, while `b` is passed by reference and becomes `200`.
-
-## Build and Run
+## Quick start
 
 ### Requirements
 
-- A C++ compiler with C++11 support or newer
-- A POSIX-like shell for the commands below
+- A C++ compiler supporting C++11 or newer
+- A Unix-like shell environment
 
 ### Compile
 
@@ -48,33 +49,57 @@ g++ -std=c++11 -Wall -Wextra -pedantic main.cpp -o main
 ./main
 ```
 
-The executable named `main` is a build artifact. Rebuild it whenever `main.cpp` changes instead of relying on an older binary.
+### Expected output
 
-## Project Layout
+```text
+10 200
+int add called
+double add called
+string add called
+```
+
+The first line confirms the reference behavior: the value passed by value stays unchanged, while the reference parameter updates.
+
+## Repository layout
 
 ```text
 .
-├── api.c       # Future API/TCP server implementation
-├── main.cpp    # Current C++ practice program
-└── main        # Locally built executable
+├── api.c       # Future TCP/API server work
+├── main.cpp    # Current C++ learning/demo file
+├── main        # Local compiled executable
+├── README.md   # Project overview and instructions
 ```
+
+## Development notes
+
+The structure is intentionally simple so each layer can be added incrementally:
+
+- keep networking concerns separate from storage logic
+- keep CRUD behavior isolated and easy to test
+- build in small steps instead of jumping straight to performance tuning
+
+This makes the project a good practice ground for learning how to grow a service from a minimal starting point.
 
 ## Roadmap
 
-The project is intended to evolve in small, testable steps:
+### Near-term goals
 
-1. Build a simple TCP server in C++.
-2. Add file-backed create, read, update, and delete operations.
-3. Expose those operations through API endpoints.
-4. Make the first performance target approximately 10,000 requests.
-5. Investigate the architecture and operational work required for a much larger target of 1,000,000 requests per second.
+- build the TCP server foundation
+- define a minimal request/response format
+- add file-backed persistence for basic record operations
 
-The performance targets are goals for future iterations, not capabilities of the current program.
+### Mid-term goals
 
-## Development Notes
+- add CRUD API endpoints
+- support concurrency and basic validation
+- test throughput under moderate request volumes
 
-Keep experiments focused and easy to run. A useful next increment is to introduce the TCP server behind a small, isolated interface before connecting persistence or request routing. That keeps the networking, storage, and API layers independently testable as the project grows.
+### Long-term goals
+
+- optimize architecture for higher throughput
+- measure bottlenecks and tune design decisions
+- revisit whether a file-based model is adequate or if a database is needed
 
 ## License
 
-No license has been declared yet.
+No license has been declared for this project yet.
