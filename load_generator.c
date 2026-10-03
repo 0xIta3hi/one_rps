@@ -13,7 +13,7 @@
 // --- CONFIGURATION ---
 #define SERVER_PORT 8080
 #define SERVER_IP "127.0.0.1"
-#define NUM_THREADS 6        // <--- How many concurrent connections you want
+#define NUM_THREADS 7        // <--- How many concurrent connections you want
 #define RUN_TIME_SECONDS 10.0   // <--- Benchmark duration
 
 // --- GLOBAL STATE ---
