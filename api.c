@@ -36,12 +36,9 @@ int handle_client(int client_fd){
             return -1;
         }
         if(bytes_read == 0){
-            printf("Client disconnected.\n");
             close(client_fd);
             return -1;
         }
-
-        printf("Received: %s", buffer);
 
         // Echo the message back to the client
         write(client_fd, buffer, bytes_read);
