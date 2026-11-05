@@ -18,32 +18,14 @@ int set_non_blocking(int fd){
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
+// Client structure
+struct client {
+    int fd;
+    char output_buffer[BUFFER_SIZE];
+    size_t output_length;
+    size_t output_sent;
+};
 // CHANGE 3: handle_client() loops to process all currently available incoming data chunks greedily
-int handle_client(int client_fd){
-    char buffer[BUFFER_SIZE];
-    
-    while (1) {
-        memset(buffer, 0, BUFFER_SIZE);           
-        ssize_t bytes_read = read(client_fd, buffer, BUFFER_SIZE - 1);
-        
-        if(bytes_read < 0){
-            // EAGAIN or EWOULDBLOCK means all data currently in the buffer has been read successfully
-            if(errno == EAGAIN || errno == EWOULDBLOCK){
-                return 0; 
-            }
-            perror("Read Error");
-            close(client_fd);
-            return -1;
-        }
-        if(bytes_read == 0){
-            close(client_fd);
-            return -1;
-        }
-
-        // Echo the message back to the client
-        write(client_fd, buffer, bytes_read);
-    }
-}
 
 void run_server_loop(int server_fd){
     int epoll_fd = epoll_create1(0);
