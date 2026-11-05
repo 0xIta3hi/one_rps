@@ -70,6 +70,39 @@ int handle_client(struct client *client)
     }
 }
 
+int flush_client_output(struct client *client)
+{
+    while (client->output_sent < client->output_length) {
+
+        ssize_t bytes_written = write(
+            client->fd,
+            client->output_buffer + client->output_sent,
+            client->output_length - client->output_sent
+        );
+
+        if (bytes_written > 0) {
+            client->output_sent += bytes_written;
+            continue;
+        }
+
+        if (bytes_written < 0 && errno == EINTR) {
+            continue;
+        }
+
+        if (bytes_written < 0 &&
+            (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            return 0;
+        }
+
+        return -1;
+    }
+
+    // All pending bytes have been written.
+    client->output_length = 0;
+    client->output_sent = 0;
+
+    return 1;
+}
 
 void run_server_loop(int server_fd){
     int epoll_fd = epoll_create1(0);
