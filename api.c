@@ -26,6 +26,50 @@ struct client {
     size_t output_sent;
 };
 // CHANGE 3: handle_client() loops to process all currently available incoming data chunks greedily
+int handle_client(struct client *client)
+{
+    char buffer[BUFFER_SIZE];
+
+    while (1) {
+        ssize_t bytes_read = read(
+            client->fd,
+            buffer,
+            BUFFER_SIZE
+        );
+
+        if (bytes_read < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                return 0;
+            }
+
+            if (errno == EINTR) {
+                continue;
+            }
+
+            perror("Read Error");
+            return -1;
+        }
+
+        if (bytes_read == 0) {
+            return -1;
+        }
+
+        // Store received data for later transmission.
+        if (client->output_length + bytes_read > BUFFER_SIZE) {
+            fprintf(stderr, "Output buffer full\n");
+            return -1;
+        }
+
+        memcpy(
+            client->output_buffer + client->output_length,
+            buffer,
+            bytes_read
+        );
+
+        client->output_length += bytes_read;
+    }
+}
+
 
 void run_server_loop(int server_fd){
     int epoll_fd = epoll_create1(0);
