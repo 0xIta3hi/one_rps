@@ -13,8 +13,9 @@
 // --- CONFIGURATION ---
 #define SERVER_PORT 8080
 #define SERVER_IP "127.0.0.1"
-#define NUM_THREADS 10        // <--- How many concurrent connections you want
+#define NUM_THREADS 100        // <--- How many concurrent connections you want
 #define RUN_TIME_SECONDS 10.0   // <--- Benchmark duration
+#define PAYLOAD_SIZE (4 * 1024)
 
 // --- GLOBAL STATE ---
 atomic_long global_request_count = 0;
@@ -45,13 +46,14 @@ void* thread_worker(void* arg) {
         return NULL;
     }
 
-    const char *request = "PING\n";
-    char buffer[1024];
+    char request[PAYLOAD_SIZE];
+    char buffer[PAYLOAD_SIZE];
+    memset(request, 'A', sizeof(request));
 
     // 3. Keep sending requests until the main thread tells everyone to stop
     while (atomic_load(&keep_running)) {
-        if (send(sock, request, strlen(request), 0) < 0) break;
-        if (recv(sock, buffer, sizeof(buffer) - 1, 0) <= 0) break;
+        if (send(sock, request, sizeof(request), 0) < 0) break;
+        if (recv(sock, buffer, sizeof(buffer), 0) <= 0) break;
 
         // Atomically increment the total request counter (thread-safe)
         atomic_fetch_add(&global_request_count, 1);
@@ -65,7 +67,6 @@ int main() {
     pthread_t threads[NUM_THREADS];
     struct timespec start, current;
 
-    printf("Starting multi-threaded benchmark...\n");
     printf("Connections: %d | Target Duration: %.1f seconds\n\n", NUM_THREADS, RUN_TIME_SECONDS);
 
     // 1. Record start time

@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include <pthread.h>
 #include <sys/epoll.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -25,51 +24,6 @@ struct client {
     size_t output_length;
     size_t output_sent;
 };
-// CHANGE 3: handle_client() loops to process all currently available incoming data chunks greedily
-int handle_client(struct client *client)
-{
-    char buffer[BUFFER_SIZE];
-
-    while (1) {
-        ssize_t bytes_read = read(
-            client->fd,
-            buffer,
-            BUFFER_SIZE
-        );
-
-        if (bytes_read < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                return 0;
-            }
-
-            if (errno == EINTR) {
-                continue;
-            }
-
-            perror("Read Error");
-            return -1;
-        }
-
-        if (bytes_read == 0) {
-            return -1;
-        }
-
-        // Store received data for later transmission.
-        if (client->output_length + bytes_read > BUFFER_SIZE) {
-            fprintf(stderr, "Output buffer full\n");
-            return -1;
-        }
-
-        memcpy(
-            client->output_buffer + client->output_length,
-            buffer,
-            bytes_read
-        );
-
-        client->output_length += bytes_read;
-    }
-}
-
 int flush_client_output(struct client *client)
 {
     while (client->output_sent < client->output_length) {
@@ -104,6 +58,59 @@ int flush_client_output(struct client *client)
     return 1;
 }
 
+int modify_client_events(int epoll_fd, struct client *client, int want_output)
+{
+    struct epoll_event ev;
+
+    ev.events = EPOLLIN | EPOLLET;
+    if (want_output) {
+        ev.events |= EPOLLOUT;
+    }
+    ev.data.ptr = client;
+
+    return epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client->fd, &ev);
+}
+
+int handle_client(struct client *client)
+{
+    char buffer[BUFFER_SIZE];
+
+    while (client->output_length == 0) {
+        ssize_t bytes_read = read(client->fd, buffer, sizeof(buffer));
+
+        if (bytes_read < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                return 0;
+            }
+            perror("Read Error");
+            return -1;
+        }
+
+        if (bytes_read == 0) {
+            return -1;
+        }
+
+        // Keep input in a temporary buffer until the client's output is available.
+        memcpy(client->output_buffer, buffer, (size_t)bytes_read);
+        client->output_length = (size_t)bytes_read;
+        client->output_sent = 0;
+
+        if (flush_client_output(client) < 0) {
+            return -1;
+        }
+
+        // If the write would block, the event loop will resume input after EPOLLOUT.
+        if (client->output_length != 0) {
+            return 0;
+        }
+    }
+
+    return 0;
+}
+
 void run_server_loop(int server_fd){
     int epoll_fd = epoll_create1(0);
     if (epoll_fd < 0) {
@@ -115,7 +122,7 @@ void run_server_loop(int server_fd){
 
     // Using Edge-Triggered (EPOLLET) for the non-blocking listening socket
     ev.events = EPOLLIN | EPOLLET;
-    ev.data.fd = server_fd;
+    ev.data.ptr = NULL;
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &ev);
 
     while(1){
@@ -127,8 +134,10 @@ void run_server_loop(int server_fd){
         }
 
         for(int i = 0; i < nfds; ++i){
-            if(events[i].data.fd == server_fd){
-                // CHANGE 2: Multi-connection accept engine. Loops to drain the connection backlog backlog queue completely.
+            struct client *client = events[i].data.ptr;
+
+            if (client == NULL) {
+                // Drain the listen queue because the listening socket is edge-triggered.
                 while (1) {
                     struct sockaddr_in client_addr;
                     socklen_t addr_len = sizeof(client_addr);
@@ -143,24 +152,70 @@ void run_server_loop(int server_fd){
                         break;
                     }
                     
-                    set_non_blocking(client_fd);
+                    if (set_non_blocking(client_fd) < 0) {
+                        perror("Failed to set client socket to non-blocking");
+                        close(client_fd);
+                        continue;
+                    }
+
+                    client = calloc(1, sizeof(*client));
+                    if (client == NULL) {
+                        perror("calloc failed");
+                        close(client_fd);
+                        continue;
+                    }
+                    client->fd = client_fd;
                     
-                    // Register client with Edge-Triggered monitoring to work alongside greedy reading loops
                     ev.events = EPOLLIN | EPOLLET;
-                    ev.data.fd = client_fd;
-                    epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev);
+                    ev.data.ptr = client;
+                    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) < 0) {
+                        perror("Failed to add client to epoll");
+                        close(client_fd);
+                        free(client);
+                        continue;
+                    }
                     
                     printf("New client connected from %s:%d (fd %d)\n", 
                            inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port), client_fd);
                 }
-            } else {
-                // Existing client socket has data
-                int active_client_fd = events[i].data.fd;
-                int status = handle_client(active_client_fd);
+                continue;
+            }
 
-                if(status == -1){
-                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, active_client_fd, NULL);
+            int close_client = 0;
+
+            if (events[i].events & (EPOLLERR | EPOLLHUP)) {
+                close_client = 1;
+            } else if (events[i].events & EPOLLOUT) {
+                int status = flush_client_output(client);
+
+                if (status < 0) {
+                    close_client = 1;
+                } else if (status == 1) {
+                    // Stop asking for writable events, then drain input already queued.
+                    if (modify_client_events(epoll_fd, client, 0) < 0 ||
+                        handle_client(client) < 0) {
+                        close_client = 1;
+                    } else if (client->output_length != 0 &&
+                               modify_client_events(epoll_fd, client, 1) < 0) {
+                        close_client = 1;
+                    }
                 }
+            } else if (events[i].events & EPOLLIN) {
+                if (handle_client(client) < 0) {
+                    close_client = 1;
+                }
+            }
+
+            if (!close_client && client->output_length != 0 &&
+                modify_client_events(epoll_fd, client, 1) < 0) {
+                close_client = 1;
+            }
+
+            if (close_client) {
+                // All client ownership ends here, preventing double close/free paths.
+                epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client->fd, NULL);
+                close(client->fd);
+                free(client);
             }
         }
     }
