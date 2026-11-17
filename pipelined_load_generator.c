@@ -9,6 +9,8 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include<errno.h>
+
 
 // --- CONFIGURATION ---
 #define SERVER_PORT 8080
@@ -20,6 +22,21 @@
 // --- GLOBAL STATE ---
 atomic_long global_request_count = 0;
 atomic_bool keep_running = true;
+
+int send_all(int sockfd, const void *buf, size_t len){
+    size_t total_sent = 0;
+    const char *ptr = (const char* )buf;
+    while(total_sent < len){
+        ssize_t n = send(sockfd, ptr + total_sent, len - total_sent, 0);
+        if(n < 0){
+            if(errno == EINTR) continue;
+            return -1;
+        }
+        if(n == 0) return -1;
+        total_sent += (size_t)n;
+    }
+    return 0;
+}
 
 // Thread worker function
 void* thread_worker(void* arg) {
