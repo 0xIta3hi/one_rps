@@ -37,7 +37,21 @@ int send_all(int sockfd, const void *buf, size_t len){
     }
     return 0;
 }
+int recv_all(int sockfd, void *buf, size_t len) {
+    size_t total_recvd = 0;
+    char *ptr = (char *)buf;
 
+    while (total_recvd < len) {
+        ssize_t n = recv(sockfd, ptr + total_recvd, len - total_recvd, 0);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            return -1;
+        }
+        if (n == 0) return -1;
+        total_recvd += (size_t)n;
+    }
+    return 0;
+}
 // Thread worker function
 void* thread_worker(void* arg) {
     int thread_id = *(int*)arg;
@@ -69,8 +83,8 @@ void* thread_worker(void* arg) {
 
     // 3. Keep sending requests until the main thread tells everyone to stop
     while (atomic_load(&keep_running)) {
-        if (send(sock, request, sizeof(request), 0) < 0) break;
-        if (recv(sock, buffer, sizeof(buffer), 0) <= 0) break;
+        if (send_all(sock, request, sizeof(request)) < 0) break;
+        if (recv_all(sock, buffer, sizeof(buffer)) < 0) break;
 
         // Atomically increment the total request counter (thread-safe)
         atomic_fetch_add(&global_request_count, 1);
