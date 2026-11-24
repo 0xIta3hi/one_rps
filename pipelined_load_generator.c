@@ -19,8 +19,9 @@
 #define PAYLOAD_SIZE (4 * 1024)
 
 // --- GLOBAL STATE ---
-atomic_long global_request_count = 0;
 atomic_bool keep_running = true;
+atomic_long global_request_count = 0;
+atomic_long global_invalid_count = 0;
 
 // --- SYNCHRONIZATION STATE ---
 pthread_mutex_t ready_mtx = PTHREAD_MUTEX_INITIALIZER;
@@ -118,11 +119,15 @@ void* thread_worker(void* arg) {
     while (atomic_load_explicit(&keep_running, memory_order_relaxed)) {
         if (send_all(sock, request, sizeof(request)) < 0) break;
         if (recv_all(sock, buffer, sizeof(buffer)) < 0) break;
-
+        if(memcmp(request, buffer, sizeof(request)) == 0) {
+            atomic_fetch_add_explicit(&global_request_count, 1, memory_order_relaxed);
+        } else {
+            atomic_fetch_add_explicit(&global_invalid_count, 1, memory_order_relaxed);
+            break;
+        }
         // Atomically increment the total request counter (thread-safe)
         atomic_fetch_add_explicit(&global_request_count, 1, memory_order_relaxed);
     }
-
     close(sock);
     return NULL;
 }
