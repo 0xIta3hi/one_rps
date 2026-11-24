@@ -33,7 +33,7 @@ int send_all(int sockfd, const void *buf, size_t len) {
     size_t total_sent = 0;
     const char *ptr = (const char *)buf;
     while (total_sent < len) {
-        ssize_t n = send(sockfd, ptr + total_sent, len - total_sent, 0);
+        ssize_t n = send(sockfd, ptr + total_sent, len - total_sent, MSG_NOSIGNAL);
         if (n < 0) {
             if (errno == EINTR) continue;
             return -1;
