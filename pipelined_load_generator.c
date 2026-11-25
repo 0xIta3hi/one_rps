@@ -14,7 +14,7 @@
 // --- CONFIGURATION ---
 #define SERVER_PORT 8080
 #define SERVER_IP "127.0.0.1"
-#define NUM_THREADS 100         // Concurrent threads
+#define NUM_THREADS 10         // Concurrent threads
 #define RUN_TIME_SECONDS 10.0   // Benchmark duration
 #define PAYLOAD_SIZE (4 * 1024)
 
