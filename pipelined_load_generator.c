@@ -125,8 +125,6 @@ void* thread_worker(void* arg) {
             atomic_fetch_add_explicit(&global_invalid_count, 1, memory_order_relaxed);
             break;
         }
-        // Atomically increment the total request counter (thread-safe)
-        atomic_fetch_add_explicit(&global_request_count, 1, memory_order_relaxed);
     }
     close(sock);
     return NULL;
@@ -200,6 +198,7 @@ int main() {
                            (double)(end.tv_nsec - start.tv_nsec) / 1e9;
 
     long long total_requests = atomic_load(&global_request_count);
+    long long invalid_request = atomic_load(&global_invalid_count);
     double requests_per_second = (double)total_requests / total_elapsed;
 
     printf("--- Benchmark Complete ---\n");
@@ -207,6 +206,7 @@ int main() {
     printf("Total Elapsed Time: %.4f seconds\n", total_elapsed);
     printf("Total Requests Sent: %lld\n", total_requests);
     printf("Throughput:         %.2f requests/sec\n", requests_per_second);
+    printf("Invalid requests: %lld\n", invalid_request);
 
     return 0;
 }
